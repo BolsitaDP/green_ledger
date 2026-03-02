@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import './App.css'
-import { apiGet } from './lib/api'
+import { ApiError, apiDownload, apiGet, apiPost } from './lib/api'
 import {
   architectureLayers,
   demoAuditTrailByBatchId,
@@ -12,88 +12,180 @@ import {
 } from './mockData'
 import type {
   AuditTrailItemViewModel,
+  AuthSession,
   BatchDocumentViewModel,
   BatchViewModel,
   UserSummaryViewModel,
 } from './types'
 
-async function loadBatches(): Promise<{ data: BatchViewModel[]; source: 'api' | 'mock' }> {
+const authStorageKey = 'greenledger.auth.session'
+
+function readStoredSession(): AuthSession | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  const rawSession = window.localStorage.getItem(authStorageKey)
+  if (!rawSession) {
+    return null
+  }
+
   try {
-    const data = await apiGet<BatchViewModel[]>('/api/batches')
-    return { data, source: 'api' }
+    return JSON.parse(rawSession) as AuthSession
   } catch {
+    window.localStorage.removeItem(authStorageKey)
+    return null
+  }
+}
+
+function persistSession(session: AuthSession | null) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  if (session) {
+    window.localStorage.setItem(authStorageKey, JSON.stringify(session))
+    return
+  }
+
+  window.localStorage.removeItem(authStorageKey)
+}
+
+function isUnauthorizedError(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 401
+}
+
+async function loadBatches(accessToken?: string): Promise<{ data: BatchViewModel[]; source: 'api' | 'mock' }> {
+  if (!accessToken) {
+    return { data: demoBatches, source: 'mock' }
+  }
+
+  try {
+    const data = await apiGet<BatchViewModel[]>('/api/batches', accessToken)
+    return { data, source: 'api' }
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      throw error
+    }
+
     return { data: demoBatches, source: 'mock' }
   }
 }
 
-async function loadUsers(): Promise<UserSummaryViewModel[]> {
+async function loadUsers(accessToken?: string): Promise<UserSummaryViewModel[]> {
+  if (!accessToken) {
+    return demoUsers
+  }
+
   try {
-    return await apiGet<UserSummaryViewModel[]>('/api/users')
+    return await apiGet<UserSummaryViewModel[]>('/api/users', accessToken)
   } catch {
     return demoUsers
   }
 }
 
-async function loadAuditTrail(batchId: string): Promise<AuditTrailItemViewModel[]> {
+async function loadAuditTrail(batchId: string, accessToken?: string): Promise<AuditTrailItemViewModel[]> {
+  if (!accessToken) {
+    return demoAuditTrailByBatchId[batchId] ?? []
+  }
+
   try {
-    return await apiGet<AuditTrailItemViewModel[]>(`/api/batches/${batchId}/audit`)
+    return await apiGet<AuditTrailItemViewModel[]>(`/api/batches/${batchId}/audit`, accessToken)
   } catch {
     return demoAuditTrailByBatchId[batchId] ?? []
   }
 }
 
-async function loadDocuments(batchId: string): Promise<BatchDocumentViewModel[]> {
+async function loadDocuments(batchId: string, accessToken?: string): Promise<BatchDocumentViewModel[]> {
+  if (!accessToken) {
+    return demoDocumentsByBatchId[batchId] ?? []
+  }
+
   try {
-    return await apiGet<BatchDocumentViewModel[]>(`/api/batches/${batchId}/documents`)
+    return await apiGet<BatchDocumentViewModel[]>(`/api/batches/${batchId}/documents`, accessToken)
   } catch {
     return demoDocumentsByBatchId[batchId] ?? []
   }
 }
 
 function App() {
+  const [authSession, setAuthSession] = useState<AuthSession | null>(() => readStoredSession())
+  const [loginEmail, setLoginEmail] = useState('camila.cultivation@greenledger.com')
+  const [loginPassword, setLoginPassword] = useState('GreenLedger123!')
+  const [isAuthenticating, setIsAuthenticating] = useState(false)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
   const [batches, setBatches] = useState<BatchViewModel[]>(demoBatches)
   const [users, setUsers] = useState<UserSummaryViewModel[]>(demoUsers)
   const [selectedBatchId, setSelectedBatchId] = useState<string>(demoBatches[0]?.id ?? '')
-  const [auditTrail, setAuditTrail] = useState<AuditTrailItemViewModel[]>(demoAuditTrailByBatchId[demoBatches[0]?.id ?? ''] ?? [])
-  const [documents, setDocuments] = useState<BatchDocumentViewModel[]>(demoDocumentsByBatchId[demoBatches[0]?.id ?? ''] ?? [])
+  const [auditTrail, setAuditTrail] = useState<AuditTrailItemViewModel[]>(
+    demoAuditTrailByBatchId[demoBatches[0]?.id ?? ''] ?? [],
+  )
+  const [documents, setDocuments] = useState<BatchDocumentViewModel[]>(
+    demoDocumentsByBatchId[demoBatches[0]?.id ?? ''] ?? [],
+  )
   const [dataSource, setDataSource] = useState<'api' | 'mock'>('mock')
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    persistSession(authSession)
+  }, [authSession])
+
+  useEffect(() => {
     let cancelled = false
 
-    void Promise.all([loadBatches(), loadUsers()]).then(([batchResult, userResult]) => {
-      if (cancelled) {
-        return
-      }
+    setIsLoading(true)
 
-      setBatches(batchResult.data)
-      setUsers(userResult)
-      setDataSource(batchResult.source)
-      setSelectedBatchId(batchResult.data[0]?.id ?? '')
-      setIsLoading(false)
-    })
+    void Promise.all([loadBatches(authSession?.accessToken), loadUsers(authSession?.accessToken)])
+      .then(([batchResult, userResult]) => {
+        if (cancelled) {
+          return
+        }
+
+        setBatches(batchResult.data)
+        setUsers(userResult)
+        setDataSource(batchResult.source)
+        setSelectedBatchId(batchResult.data[0]?.id ?? '')
+        setIsLoading(false)
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return
+        }
+
+        if (isUnauthorizedError(error)) {
+          setAuthSession(null)
+          setAuthError('La sesion expiro o ya no es valida. Inicia sesion otra vez.')
+        }
+
+        setBatches(demoBatches)
+        setUsers(demoUsers)
+        setDataSource('mock')
+        setSelectedBatchId(demoBatches[0]?.id ?? '')
+        setIsLoading(false)
+      })
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [authSession?.accessToken])
 
   useEffect(() => {
     if (!selectedBatchId) {
       setAuditTrail([])
+      setDocuments([])
       return
     }
 
     let cancelled = false
 
-    void loadAuditTrail(selectedBatchId).then((entries) => {
+    void loadAuditTrail(selectedBatchId, authSession?.accessToken).then((entries) => {
       if (!cancelled) {
         setAuditTrail(entries)
       }
     })
 
-    void loadDocuments(selectedBatchId).then((items) => {
+    void loadDocuments(selectedBatchId, authSession?.accessToken).then((items) => {
       if (!cancelled) {
         setDocuments(items)
       }
@@ -102,9 +194,70 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [selectedBatchId])
+  }, [selectedBatchId, authSession?.accessToken])
 
   const selectedBatch = batches.find((batch) => batch.id === selectedBatchId) ?? batches[0]
+  const isAuthenticated = authSession !== null
+
+  async function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setIsAuthenticating(true)
+    setAuthError(null)
+
+    try {
+      const session = await apiPost<AuthSession>('/api/auth/login', {
+        email: loginEmail,
+        password: loginPassword,
+      })
+
+      setAuthSession(session)
+      setDownloadError(null)
+    } catch (error) {
+      setAuthError(
+        error instanceof ApiError && error.status === 401
+          ? 'Credenciales invalidas. Revisa el correo y la clave.'
+          : 'No pude iniciar sesion contra la API. Verifica que el backend este corriendo.',
+      )
+    } finally {
+      setIsAuthenticating(false)
+    }
+  }
+
+  async function handleLogout() {
+    if (authSession) {
+      try {
+        await apiPost<void>('/api/auth/logout', { refreshToken: authSession.refreshToken })
+      } catch {
+      }
+    }
+
+    setAuthSession(null)
+    setAuthError(null)
+    setDownloadError(null)
+  }
+
+  async function handleDownloadDocument(documentId: string, fileName: string) {
+    if (!authSession) {
+      setDownloadError('Necesitas iniciar sesion para descargar documentos protegidos.')
+      return
+    }
+
+    try {
+      setDownloadError(null)
+      const blob = await apiDownload(`/api/documents/${documentId}/download`, authSession.accessToken)
+      const blobUrl = window.URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+
+      anchor.href = blobUrl
+      anchor.download = fileName
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      window.URL.revokeObjectURL(blobUrl)
+    } catch {
+      setDownloadError('No pude descargar el archivo. Revisa la sesion o que la API siga corriendo.')
+    }
+  }
 
   return (
     <div className="page-shell">
@@ -113,8 +266,8 @@ function App() {
           <span className="eyebrow">GreenLedger</span>
           <h1>Regulatory Compliance & Traceability Platform</h1>
           <p className="hero-text">
-            Este mini demo muestra la idea central del producto: un lote medico, sus
-            movimientos, sus documentos y la base de auditoria que despues volveremos real en el backend.
+            Este mini demo ya muestra el ciclo principal del producto: una sesion real, lotes protegidos por
+            permisos, documentos regulados y una traza que despues seguiremos endureciendo.
           </p>
           <div className="hero-pills">
             <span>React frontend</span>
@@ -124,13 +277,47 @@ function App() {
         </div>
 
         <div className="hero-panel">
-          <p className="panel-label">Estado del demo</p>
+          <p className="panel-label">Sesion y estado</p>
+          {isAuthenticated ? (
+            <div className="auth-card">
+              <strong>{authSession.email}</strong>
+              <span>Rol activo: {authSession.role}</span>
+              <span>Token vence: {new Date(authSession.accessTokenExpiresAtUtc).toLocaleString('es-CO')}</span>
+              <button type="button" className="auth-button secondary-button" onClick={handleLogout}>
+                Cerrar sesion
+              </button>
+            </div>
+          ) : (
+            <form className="login-form" onSubmit={handleLoginSubmit}>
+              <label>
+                Correo demo
+                <input value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} />
+              </label>
+              <label>
+                Clave demo
+                <input
+                  type="password"
+                  value={loginPassword}
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                />
+              </label>
+              <button type="submit" className="auth-button" disabled={isAuthenticating}>
+                {isAuthenticating ? 'Entrando...' : 'Iniciar sesion'}
+              </button>
+              <p className="helper-text">
+                Usa por ejemplo `camila.cultivation@greenledger.com` con `GreenLedger123!`.
+              </p>
+            </form>
+          )}
+          {authError ? <p className="error-banner">{authError}</p> : null}
           <div className="status-card">
-            <strong>{isLoading ? 'Cargando datos...' : dataSource === 'api' ? 'Conectado a API' : 'Modo demo local'}</strong>
+            <strong>
+              {isLoading ? 'Cargando datos...' : dataSource === 'api' ? 'Conectado a API protegida' : 'Modo demo local'}
+            </strong>
             <span>
               {dataSource === 'api'
-                ? 'El front esta leyendo la API del backend.'
-                : 'Como el backend aun no corre en tu maquina, el front usa datos simulados.'}
+                ? 'El front esta leyendo la API del backend con JWT en las requests.'
+                : 'Si no hay sesion valida o la API no responde, el front usa datos simulados.'}
             </span>
           </div>
           <div className="metric-grid">
@@ -140,7 +327,7 @@ function App() {
             </article>
             <article>
               <strong>{users.length}</strong>
-              <span>Usuarios demo</span>
+              <span>Usuarios visibles</span>
             </article>
             <article>
               <strong>{auditTrail.length}</strong>
@@ -158,8 +345,8 @@ function App() {
               <h2>Flujo del lote</h2>
             </div>
             <p className="section-description">
-              Piensa en esto como la historia completa de un producto: nace en cultivo,
-              pasa por laboratorio y termina en distribucion.
+              Piensa en esto como la historia completa de un producto: nace en cultivo, pasa por laboratorio y termina
+              en distribucion.
             </p>
           </div>
 
@@ -208,7 +395,7 @@ function App() {
               <h2>Lotes monitoreados</h2>
             </div>
             <p className="section-description">
-              Esta tabla es el corazon del producto. Luego aqui agregaremos filtros, paginacion y auditoria real.
+              Esta tabla ya depende de autenticacion. Si no inicias sesion, veras el modo mock local.
             </p>
           </div>
 
@@ -257,7 +444,7 @@ function App() {
               <h2>Roles del sistema</h2>
             </div>
             <p className="section-description">
-              Cada rol vera y hara cosas diferentes. Eso evita errores y ayuda al cumplimiento.
+              Cada rol ve y hace cosas diferentes. Ya puedes probarlo entrando con usuarios distintos.
             </p>
           </div>
 
@@ -279,7 +466,7 @@ function App() {
               <h2>Usuarios que usan el sistema</h2>
             </div>
             <p className="section-description">
-              La empresa opera dentro de la app. Cada persona tiene un rol y por eso no todos hacen lo mismo.
+              El backend decide quienes se pueden listar. Regulador y compliance ven mas que cultivo.
             </p>
           </div>
 
@@ -301,7 +488,8 @@ function App() {
               <h2>Historial del lote seleccionado</h2>
             </div>
             <p className="section-description">
-              Esto es lo importante del producto: puedes reconstruir quien hizo que sobre el lote {selectedBatch?.batchNumber ?? 'seleccionado'}.
+              Esto es lo importante del producto: puedes reconstruir quien hizo que sobre el lote{' '}
+              {selectedBatch?.batchNumber ?? 'seleccionado'}.
             </p>
           </div>
 
@@ -314,7 +502,7 @@ function App() {
                     <span>{new Date(entry.occurredAtUtc).toLocaleString('es-CO')}</span>
                   </div>
                   <p>
-                    <strong>{entry.actorEmail}</strong> actuó como <strong>{entry.actorRole}</strong>.
+                    <strong>{entry.actorEmail}</strong> actuo como <strong>{entry.actorRole}</strong>.
                   </p>
                   {entry.reason ? <p>{entry.reason}</p> : null}
                   <div className="audit-json-grid">
@@ -342,7 +530,7 @@ function App() {
               <h2>Evidencia del lote seleccionado</h2>
             </div>
             <p className="section-description">
-              Cada archivo guarda integridad, versionado y fecha de vencimiento. Eso permite demostrar cumplimiento.
+              Cada archivo guarda integridad, versionado y fecha de vencimiento. La descarga ahora manda JWT.
             </p>
           </div>
 
@@ -355,27 +543,29 @@ function App() {
                     <span>v{document.version}</span>
                   </div>
                   <p>{document.contentType}</p>
-                  <p>SHA256: <code>{document.sha256Hash}</code></p>
+                  <p>
+                    SHA256: <code>{document.sha256Hash}</code>
+                  </p>
                   <p>
                     Vence:{' '}
                     {document.expiresAtUtc
                       ? new Date(document.expiresAtUtc).toLocaleDateString('es-CO')
                       : 'Sin vencimiento'}
                   </p>
-                  <a
+                  <button
+                    type="button"
                     className="download-link"
-                    href={`http://localhost:5105/api/documents/${document.id}/download`}
-                    target="_blank"
-                    rel="noreferrer"
+                    onClick={() => handleDownloadDocument(document.id, document.fileName)}
                   >
                     Descargar
-                  </a>
+                  </button>
                 </article>
               ))
             ) : (
               <p className="empty-state">Este lote aun no tiene documentos registrados.</p>
             )}
           </div>
+          {downloadError ? <p className="error-banner">{downloadError}</p> : null}
         </section>
 
         <section className="section-card">

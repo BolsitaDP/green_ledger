@@ -1,7 +1,9 @@
 using GreenLedger.Application;
+using GreenLedger.Api.Authorization;
 using GreenLedger.Infrastructure;
 using GreenLedger.Infrastructure.Auth;
 using GreenLedger.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -32,8 +34,7 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey))
         };
     });
-
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(AuthorizationPolicies.AddGreenLedgerPolicies);
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo { Title = "GreenLedger API", Version = "v1" });

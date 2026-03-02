@@ -9,6 +9,7 @@ Thumbs.db
 *.user
 *.suo
 *.log
+TestResults/
 explicaciones/
 GETTING_STARTED_ES.md
 front/.env.example

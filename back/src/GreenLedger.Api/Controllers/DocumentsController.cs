@@ -1,4 +1,6 @@
 using GreenLedger.Application.Abstractions;
+using GreenLedger.Api.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GreenLedger.Api.Controllers;
@@ -8,6 +10,7 @@ namespace GreenLedger.Api.Controllers;
 public sealed class DocumentsController : ControllerBase
 {
     [HttpGet("{id:guid}/download")]
+    [Authorize(Policy = AuthorizationPolicies.BatchRead)]
     public async Task<IActionResult> Download(
         Guid id,
         [FromServices] IDocumentService documentService,

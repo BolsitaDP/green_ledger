@@ -2,6 +2,7 @@ using GreenLedger.Application.Abstractions;
 using GreenLedger.Application.Audit.Dtos;
 using GreenLedger.Application.Batches.Dtos;
 using GreenLedger.Application.Documents.Dtos;
+using GreenLedger.Api.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -14,6 +15,7 @@ public sealed class BatchesController : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyCollection<BatchSummaryDto>), StatusCodes.Status200OK)]
+    [Authorize(Policy = AuthorizationPolicies.BatchRead)]
     public async Task<ActionResult<IReadOnlyCollection<BatchSummaryDto>>> GetAll(
         [FromServices] IBatchReadService batchReadService,
         CancellationToken cancellationToken)
@@ -24,7 +26,7 @@ public sealed class BatchesController : ControllerBase
 
     [HttpPost]
     [ProducesResponseType(typeof(BatchSummaryDto), StatusCodes.Status201Created)]
-    [Authorize]
+    [Authorize(Policy = AuthorizationPolicies.BatchCreate)]
     public async Task<ActionResult<BatchSummaryDto>> Create(
         [FromBody] CreateBatchRequestDto request,
         [FromServices] IBatchCommandService batchCommandService,
@@ -36,7 +38,7 @@ public sealed class BatchesController : ControllerBase
 
     [HttpPost("{id:guid}/movements")]
     [ProducesResponseType(typeof(BatchSummaryDto), StatusCodes.Status200OK)]
-    [Authorize]
+    [Authorize(Policy = AuthorizationPolicies.BatchMove)]
     public async Task<ActionResult<BatchSummaryDto>> RegisterMovement(
         Guid id,
         [FromBody] RegisterBatchMovementRequestDto request,
@@ -49,7 +51,7 @@ public sealed class BatchesController : ControllerBase
 
     [HttpPatch("{id:guid}/status")]
     [ProducesResponseType(typeof(BatchSummaryDto), StatusCodes.Status200OK)]
-    [Authorize]
+    [Authorize(Policy = AuthorizationPolicies.BatchStatusChange)]
     public async Task<ActionResult<BatchSummaryDto>> ChangeStatus(
         Guid id,
         [FromBody] ChangeBatchStatusRequestDto request,
@@ -62,6 +64,7 @@ public sealed class BatchesController : ControllerBase
 
     [HttpGet("{id:guid}/documents")]
     [ProducesResponseType(typeof(IReadOnlyCollection<BatchDocumentDto>), StatusCodes.Status200OK)]
+    [Authorize(Policy = AuthorizationPolicies.BatchRead)]
     public async Task<ActionResult<IReadOnlyCollection<BatchDocumentDto>>> GetDocuments(
         Guid id,
         [FromServices] IDocumentService documentService,
@@ -74,7 +77,7 @@ public sealed class BatchesController : ControllerBase
     [HttpPost("{id:guid}/documents")]
     [ProducesResponseType(typeof(BatchDocumentDto), StatusCodes.Status201Created)]
     [RequestSizeLimit(10 * 1024 * 1024)]
-    [Authorize]
+    [Authorize(Policy = AuthorizationPolicies.DocumentUpload)]
     public async Task<ActionResult<BatchDocumentDto>> UploadDocument(
         Guid id,
         [FromForm] DateTimeOffset? expiresAtUtc,
@@ -101,6 +104,7 @@ public sealed class BatchesController : ControllerBase
 
     [HttpGet("{id:guid}/audit")]
     [ProducesResponseType(typeof(IReadOnlyCollection<AuditEntryDto>), StatusCodes.Status200OK)]
+    [Authorize(Policy = AuthorizationPolicies.AuditRead)]
     public async Task<ActionResult<IReadOnlyCollection<AuditEntryDto>>> GetAuditTrail(
         Guid id,
         [FromServices] IAuditReadService auditReadService,

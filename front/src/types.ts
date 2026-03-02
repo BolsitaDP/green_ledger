@@ -45,6 +45,15 @@ export type BatchDocumentViewModel = {
   createdAtUtc: string
 }
 
+export type AuthSession = {
+  accessToken: string
+  refreshToken: string
+  accessTokenExpiresAtUtc: string
+  userId: string
+  email: string
+  role: string
+}
+
 export type ArchitectureLayer = {
   name: string
   job: string
