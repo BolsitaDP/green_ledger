@@ -32,6 +32,19 @@ export type AuditTrailItemViewModel = {
   occurredAtUtc: string
 }
 
+export type BatchDocumentViewModel = {
+  id: string
+  batchId: string
+  fileName: string
+  contentType: string
+  fileSizeInBytes: number
+  sha256Hash: string
+  version: number
+  status: string
+  expiresAtUtc: string | null
+  createdAtUtc: string
+}
+
 export type ArchitectureLayer = {
   name: string
   job: string

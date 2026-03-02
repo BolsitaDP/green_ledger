@@ -10,6 +10,7 @@ public sealed class GreenLedgerDbContext(DbContextOptions<GreenLedgerDbContext> 
     public DbSet<CertificationDocument> CertificationDocuments => Set<CertificationDocument>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

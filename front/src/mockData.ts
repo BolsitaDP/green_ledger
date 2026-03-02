@@ -1,6 +1,7 @@
 import type {
   ArchitectureLayer,
   AuditTrailItemViewModel,
+  BatchDocumentViewModel,
   BatchViewModel,
   ImplementationPhase,
   RoleCard,
@@ -149,6 +150,37 @@ export const demoAuditTrailByBatchId: Record<string, AuditTrailItemViewModel[]> 
       correlationId: 'corr-101',
       ipAddress: '10.0.10.24',
       occurredAtUtc: '2026-02-25T10:15:00Z',
+    },
+  ],
+}
+
+export const demoDocumentsByBatchId: Record<string, BatchDocumentViewModel[]> = {
+  'd8e5544b-cf0f-4adc-8b83-118b81df5f55': [
+    {
+      id: 'doc-a1',
+      batchId: 'd8e5544b-cf0f-4adc-8b83-118b81df5f55',
+      fileName: 'coa-cbd-oil-v1.pdf',
+      contentType: 'application/pdf',
+      fileSizeInBytes: 180224,
+      sha256Hash: '2ec22b6f1b8c1bc264dbfcd6b2d35fa6e87cd88d5fa4d780f5b3182fd4b479ab',
+      version: 1,
+      status: 'Pending Review',
+      expiresAtUtc: '2026-08-26T00:00:00Z',
+      createdAtUtc: '2026-02-26T14:30:00Z',
+    },
+  ],
+  '6d61c2fd-9cc0-4cf2-9fe7-8854068c93e0': [
+    {
+      id: 'doc-b1',
+      batchId: '6d61c2fd-9cc0-4cf2-9fe7-8854068c93e0',
+      fileName: 'release-authorization.pdf',
+      contentType: 'application/pdf',
+      fileSizeInBytes: 88912,
+      sha256Hash: '8ee217aa992b34b3ebb1b9380156fa7429ecba6ced48925787b81051f31cc06d',
+      version: 1,
+      status: 'Pending Review',
+      expiresAtUtc: '2026-07-02T00:00:00Z',
+      createdAtUtc: '2026-02-25T10:15:00Z',
     },
   ],
 }

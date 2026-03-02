@@ -249,7 +249,8 @@ th {
 }
 
 .users-list,
-.audit-shell {
+.audit-shell,
+.documents-grid {
   display: grid;
   gap: 1rem;
 }
@@ -259,7 +260,8 @@ th {
 }
 
 .user-card,
-.audit-card {
+.audit-card,
+.document-card {
   border-radius: 20px;
   padding: 1rem;
   background: rgba(12, 22, 16, 0.9);
@@ -274,6 +276,7 @@ th {
 .user-card span,
 .user-card p,
 .audit-card p,
+.document-card p,
 .audit-header span,
 .audit-json-grid span,
 .empty-state {
@@ -281,7 +284,8 @@ th {
 }
 
 .user-card p,
-.audit-card p {
+.audit-card p,
+.document-card p {
   margin-bottom: 0;
 }
 
@@ -318,6 +322,21 @@ th {
   word-break: break-word;
   font-family: var(--font-mono);
   color: #d8e6d9;
+}
+
+.document-card code {
+  font-family: var(--font-mono);
+  word-break: break-word;
+  color: #d8e6d9;
+}
+
+.download-link {
+  display: inline-flex;
+  margin-top: 0.9rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgba(193, 214, 194, 0.16);
+  background: rgba(169, 201, 171, 0.08);
 }
 
 @media (max-width: 980px) {

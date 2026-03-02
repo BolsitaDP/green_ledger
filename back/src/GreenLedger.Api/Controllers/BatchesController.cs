@@ -2,7 +2,9 @@ using GreenLedger.Application.Abstractions;
 using GreenLedger.Application.Audit.Dtos;
 using GreenLedger.Application.Batches.Dtos;
 using GreenLedger.Application.Documents.Dtos;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace GreenLedger.Api.Controllers;
 
@@ -22,36 +24,39 @@ public sealed class BatchesController : ControllerBase
 
     [HttpPost]
     [ProducesResponseType(typeof(BatchSummaryDto), StatusCodes.Status201Created)]
+    [Authorize]
     public async Task<ActionResult<BatchSummaryDto>> Create(
         [FromBody] CreateBatchRequestDto request,
         [FromServices] IBatchCommandService batchCommandService,
         CancellationToken cancellationToken)
     {
-        var createdBatch = await batchCommandService.CreateBatchAsync(request, cancellationToken);
+        var createdBatch = await batchCommandService.CreateBatchAsync(request, GetActorUserId(), cancellationToken);
         return CreatedAtAction(nameof(GetAll), new { id = createdBatch.Id }, createdBatch);
     }
 
     [HttpPost("{id:guid}/movements")]
     [ProducesResponseType(typeof(BatchSummaryDto), StatusCodes.Status200OK)]
+    [Authorize]
     public async Task<ActionResult<BatchSummaryDto>> RegisterMovement(
         Guid id,
         [FromBody] RegisterBatchMovementRequestDto request,
         [FromServices] IBatchCommandService batchCommandService,
         CancellationToken cancellationToken)
     {
-        var updatedBatch = await batchCommandService.RegisterMovementAsync(id, request, cancellationToken);
+        var updatedBatch = await batchCommandService.RegisterMovementAsync(id, request, GetActorUserId(), cancellationToken);
         return Ok(updatedBatch);
     }
 
     [HttpPatch("{id:guid}/status")]
     [ProducesResponseType(typeof(BatchSummaryDto), StatusCodes.Status200OK)]
+    [Authorize]
     public async Task<ActionResult<BatchSummaryDto>> ChangeStatus(
         Guid id,
         [FromBody] ChangeBatchStatusRequestDto request,
         [FromServices] IBatchCommandService batchCommandService,
         CancellationToken cancellationToken)
     {
-        var updatedBatch = await batchCommandService.ChangeStatusAsync(id, request, cancellationToken);
+        var updatedBatch = await batchCommandService.ChangeStatusAsync(id, request, GetActorUserId(), cancellationToken);
         return Ok(updatedBatch);
     }
 
@@ -69,9 +74,9 @@ public sealed class BatchesController : ControllerBase
     [HttpPost("{id:guid}/documents")]
     [ProducesResponseType(typeof(BatchDocumentDto), StatusCodes.Status201Created)]
     [RequestSizeLimit(10 * 1024 * 1024)]
+    [Authorize]
     public async Task<ActionResult<BatchDocumentDto>> UploadDocument(
         Guid id,
-        [FromForm] Guid actorUserId,
         [FromForm] DateTimeOffset? expiresAtUtc,
         IFormFile file,
         [FromServices] IDocumentService documentService,
@@ -83,9 +88,9 @@ public sealed class BatchesController : ControllerBase
             id,
             new UploadBatchDocumentRequestDto
             {
-                ActorUserId = actorUserId,
                 ExpiresAtUtc = expiresAtUtc
             },
+            GetActorUserId(),
             file.FileName,
             file.ContentType,
             stream,
@@ -103,5 +108,14 @@ public sealed class BatchesController : ControllerBase
     {
         var auditTrail = await auditReadService.GetBatchAuditTrailAsync(id, cancellationToken);
         return Ok(auditTrail);
+    }
+
+    private Guid GetActorUserId()
+    {
+        var rawValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        return Guid.TryParse(rawValue, out var userId)
+            ? userId
+            : throw new InvalidOperationException("Authenticated user id claim is missing.");
     }
 }

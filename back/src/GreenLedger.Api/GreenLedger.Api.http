@@ -1,7 +1,38 @@
 @baseUrl = http://localhost:5105
+@accessToken = paste-access-token-here
+@refreshToken = paste-refresh-token-here
 
 GET {{baseUrl}}/health
 Accept: application/json
+
+###
+
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "camila.cultivation@greenledger.com",
+  "password": "GreenLedger123!"
+}
+
+###
+
+POST {{baseUrl}}/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
+
+###
+
+POST {{baseUrl}}/api/auth/logout
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "refreshToken": "{{refreshToken}}"
+}
 
 ###
 
@@ -11,34 +42,34 @@ Accept: application/json
 ###
 
 POST {{baseUrl}}/api/batches
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
   "batchNumber": "GL-2026-010",
   "productName": "CBD Gummies 20ct",
-  "cultivarName": "Calm River",
-  "actorUserId": "db71fe67-2784-45f7-bc1f-20ff7d8f9cf7"
+  "cultivarName": "Calm River"
 }
 
 ###
 
 POST {{baseUrl}}/api/batches/321ca2a0-5241-41f4-bf0a-b27c083c2436/movements
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
   "toStage": "Released",
-  "actorUserId": "2b0472a8-7f72-4001-afd9-f01684099b54",
   "notes": "Shipment left the facility."
 }
 
 ###
 
 PATCH {{baseUrl}}/api/batches/575cfaf6-54bb-491f-a3d8-adb32a974972/status
+Authorization: Bearer {{accessToken}}
 Content-Type: application/json
 
 {
   "status": "Active",
-  "actorUserId": "df35536a-bd8d-4c84-9bc4-38f895a6828c",
   "reason": "Investigation completed and lot resumed."
 }
 
@@ -46,6 +77,23 @@ Content-Type: application/json
 
 GET {{baseUrl}}/api/batches/321ca2a0-5241-41f4-bf0a-b27c083c2436/documents
 Accept: application/json
+
+###
+
+POST {{baseUrl}}/api/batches/321ca2a0-5241-41f4-bf0a-b27c083c2436/documents
+Authorization: Bearer {{accessToken}}
+Content-Type: multipart/form-data; boundary=---WebKitFormBoundaryGreenLedger
+
+---WebKitFormBoundaryGreenLedger
+Content-Disposition: form-data; name="expiresAtUtc"
+
+2026-12-31T00:00:00Z
+---WebKitFormBoundaryGreenLedger
+Content-Disposition: form-data; name="file"; filename="sample.pdf"
+Content-Type: application/pdf
+
+< ./sample.pdf
+---WebKitFormBoundaryGreenLedger--
 
 ###
 

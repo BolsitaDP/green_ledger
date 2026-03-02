@@ -27,16 +27,12 @@ internal sealed class PostgresDocumentService(
     public async Task<BatchDocumentDto> UploadDocumentAsync(
         Guid batchId,
         UploadBatchDocumentRequestDto request,
+        Guid actorUserId,
         string originalFileName,
         string contentType,
         Stream content,
         CancellationToken cancellationToken)
     {
-        if (request.ActorUserId == Guid.Empty)
-        {
-            throw new InvalidOperationException("Actor user is required.");
-        }
-
         if (string.IsNullOrWhiteSpace(originalFileName))
         {
             throw new InvalidOperationException("A file name is required.");
@@ -52,7 +48,7 @@ internal sealed class PostgresDocumentService(
             ?? throw new KeyNotFoundException("Batch was not found.");
 
         var actor = await dbContext.UserAccounts
-            .FirstOrDefaultAsync(x => x.Id == request.ActorUserId && x.IsActive, cancellationToken)
+            .FirstOrDefaultAsync(x => x.Id == actorUserId && x.IsActive, cancellationToken)
             ?? throw new KeyNotFoundException("Actor user was not found or is inactive.");
 
         var fileName = Path.GetFileName(originalFileName);

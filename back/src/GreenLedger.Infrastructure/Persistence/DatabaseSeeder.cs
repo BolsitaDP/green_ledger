@@ -1,12 +1,15 @@
 using GreenLedger.Domain.Entities;
 using GreenLedger.Domain.Enums;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace GreenLedger.Infrastructure.Persistence;
 
-public sealed class DatabaseSeeder(GreenLedgerDbContext dbContext)
+public sealed class DatabaseSeeder(
+    GreenLedgerDbContext dbContext,
+    PasswordHasher<UserAccount> passwordHasher)
 {
     private static readonly JsonSerializerOptions AuditJsonOptions = new()
     {
@@ -17,6 +20,7 @@ public sealed class DatabaseSeeder(GreenLedgerDbContext dbContext)
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
         await BackfillLegacyDocumentMetadataAsync(cancellationToken);
+        await BackfillLegacyPasswordsAsync(cancellationToken);
 
         if (await dbContext.Batches.AnyAsync(cancellationToken))
         {
@@ -24,6 +28,11 @@ public sealed class DatabaseSeeder(GreenLedgerDbContext dbContext)
         }
 
         var users = CreateDemoUsers();
+        foreach (var user in users)
+        {
+            user.SetPasswordHash(passwordHasher.HashPassword(user, "GreenLedger123!"));
+        }
+
         var seededData = CreateDemoBatchesAndAudit(users);
 
         await dbContext.UserAccounts.AddRangeAsync(users, cancellationToken);
@@ -55,16 +64,19 @@ public sealed class DatabaseSeeder(GreenLedgerDbContext dbContext)
     {
         const string tenantId = "demo-tenant";
 
-        return
-        [
-            new("Laura Admin", "laura.admin@greenledger.com", PlatformRole.Admin, tenantId),
-            new("Ana Compliance", "ana.compliance@greenledger.com", PlatformRole.ComplianceOfficer, tenantId),
-            new("Sofia Quality", "sofia.quality@greenledger.com", PlatformRole.QualityManager, tenantId),
-            new("Camila Cultivation", "camila.cultivation@greenledger.com", PlatformRole.CultivationOperator, tenantId),
-            new("Diego Lab", "diego.lab@greenledger.com", PlatformRole.LabAnalyst, tenantId),
-            new("Mateo Distribution", "mateo.distribution@greenledger.com", PlatformRole.DistributionOperator, tenantId),
-            new("Rita Regulator", "rita.regulator@gov.example", PlatformRole.Regulator, tenantId)
-        ];
+        var users =
+        new[]
+        {
+            new UserAccount("Laura Admin", "laura.admin@greenledger.com", PlatformRole.Admin, tenantId),
+            new UserAccount("Ana Compliance", "ana.compliance@greenledger.com", PlatformRole.ComplianceOfficer, tenantId),
+            new UserAccount("Sofia Quality", "sofia.quality@greenledger.com", PlatformRole.QualityManager, tenantId),
+            new UserAccount("Camila Cultivation", "camila.cultivation@greenledger.com", PlatformRole.CultivationOperator, tenantId),
+            new UserAccount("Diego Lab", "diego.lab@greenledger.com", PlatformRole.LabAnalyst, tenantId),
+            new UserAccount("Mateo Distribution", "mateo.distribution@greenledger.com", PlatformRole.DistributionOperator, tenantId),
+            new UserAccount("Rita Regulator", "rita.regulator@gov.example", PlatformRole.Regulator, tenantId)
+        };
+
+        return users;
     }
 
     private static (IReadOnlyCollection<Batch> Batches, IReadOnlyCollection<AuditEntry> AuditEntries) CreateDemoBatchesAndAudit(
@@ -160,5 +172,24 @@ public sealed class DatabaseSeeder(GreenLedgerDbContext dbContext)
     private static string? SerializeJsonOrNull(object? value)
     {
         return value is null ? null : JsonSerializer.Serialize(value, AuditJsonOptions);
+    }
+
+    private async Task BackfillLegacyPasswordsAsync(CancellationToken cancellationToken)
+    {
+        var usersWithoutPassword = await dbContext.UserAccounts
+            .Where(x => x.PasswordHash == string.Empty)
+            .ToListAsync(cancellationToken);
+
+        if (usersWithoutPassword.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var user in usersWithoutPassword)
+        {
+            user.SetPasswordHash(passwordHasher.HashPassword(user, "GreenLedger123!"));
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 }

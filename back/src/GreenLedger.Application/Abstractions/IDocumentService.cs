@@ -7,6 +7,7 @@ public interface IDocumentService
     Task<BatchDocumentDto> UploadDocumentAsync(
         Guid batchId,
         UploadBatchDocumentRequestDto request,
+        Guid actorUserId,
         string originalFileName,
         string contentType,
         Stream content,

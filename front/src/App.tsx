@@ -5,11 +5,17 @@ import {
   architectureLayers,
   demoAuditTrailByBatchId,
   demoBatches,
+  demoDocumentsByBatchId,
   demoUsers,
   implementationPhases,
   roleCards,
 } from './mockData'
-import type { AuditTrailItemViewModel, BatchViewModel, UserSummaryViewModel } from './types'
+import type {
+  AuditTrailItemViewModel,
+  BatchDocumentViewModel,
+  BatchViewModel,
+  UserSummaryViewModel,
+} from './types'
 
 async function loadBatches(): Promise<{ data: BatchViewModel[]; source: 'api' | 'mock' }> {
   try {
@@ -36,11 +42,20 @@ async function loadAuditTrail(batchId: string): Promise<AuditTrailItemViewModel[
   }
 }
 
+async function loadDocuments(batchId: string): Promise<BatchDocumentViewModel[]> {
+  try {
+    return await apiGet<BatchDocumentViewModel[]>(`/api/batches/${batchId}/documents`)
+  } catch {
+    return demoDocumentsByBatchId[batchId] ?? []
+  }
+}
+
 function App() {
   const [batches, setBatches] = useState<BatchViewModel[]>(demoBatches)
   const [users, setUsers] = useState<UserSummaryViewModel[]>(demoUsers)
   const [selectedBatchId, setSelectedBatchId] = useState<string>(demoBatches[0]?.id ?? '')
   const [auditTrail, setAuditTrail] = useState<AuditTrailItemViewModel[]>(demoAuditTrailByBatchId[demoBatches[0]?.id ?? ''] ?? [])
+  const [documents, setDocuments] = useState<BatchDocumentViewModel[]>(demoDocumentsByBatchId[demoBatches[0]?.id ?? ''] ?? [])
   const [dataSource, setDataSource] = useState<'api' | 'mock'>('mock')
   const [isLoading, setIsLoading] = useState(true)
 
@@ -75,6 +90,12 @@ function App() {
     void loadAuditTrail(selectedBatchId).then((entries) => {
       if (!cancelled) {
         setAuditTrail(entries)
+      }
+    })
+
+    void loadDocuments(selectedBatchId).then((items) => {
+      if (!cancelled) {
+        setDocuments(items)
       }
     })
 
@@ -310,6 +331,49 @@ function App() {
               ))
             ) : (
               <p className="empty-state">Selecciona un lote para revisar su traza auditable.</p>
+            )}
+          </div>
+        </section>
+
+        <section className="section-card wide-card">
+          <div className="section-heading">
+            <div>
+              <p className="section-kicker">Documentos regulatorios</p>
+              <h2>Evidencia del lote seleccionado</h2>
+            </div>
+            <p className="section-description">
+              Cada archivo guarda integridad, versionado y fecha de vencimiento. Eso permite demostrar cumplimiento.
+            </p>
+          </div>
+
+          <div className="documents-grid">
+            {documents.length > 0 ? (
+              documents.map((document) => (
+                <article key={document.id} className="document-card">
+                  <div className="audit-header">
+                    <strong>{document.fileName}</strong>
+                    <span>v{document.version}</span>
+                  </div>
+                  <p>{document.contentType}</p>
+                  <p>SHA256: <code>{document.sha256Hash}</code></p>
+                  <p>
+                    Vence:{' '}
+                    {document.expiresAtUtc
+                      ? new Date(document.expiresAtUtc).toLocaleDateString('es-CO')
+                      : 'Sin vencimiento'}
+                  </p>
+                  <a
+                    className="download-link"
+                    href={`http://localhost:5105/api/documents/${document.id}/download`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Descargar
+                  </a>
+                </article>
+              ))
+            ) : (
+              <p className="empty-state">Este lote aun no tiene documentos registrados.</p>
             )}
           </div>
         </section>

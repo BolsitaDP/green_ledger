@@ -20,6 +20,10 @@ internal sealed class UserAccountConfiguration : IEntityTypeConfiguration<UserAc
             .HasMaxLength(255)
             .IsRequired();
 
+        builder.Property(x => x.PasswordHash)
+            .HasMaxLength(1000)
+            .IsRequired();
+
         builder.Property(x => x.Role)
             .HasConversion<string>()
             .HasMaxLength(80);

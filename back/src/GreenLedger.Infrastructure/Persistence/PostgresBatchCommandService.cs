@@ -16,11 +16,11 @@ internal sealed class PostgresBatchCommandService(GreenLedgerDbContext dbContext
         Converters = { new JsonStringEnumConverter() }
     };
 
-    public async Task<BatchSummaryDto> CreateBatchAsync(CreateBatchRequestDto request, CancellationToken cancellationToken)
+    public async Task<BatchSummaryDto> CreateBatchAsync(CreateBatchRequestDto request, Guid actorUserId, CancellationToken cancellationToken)
     {
         ValidateCreateRequest(request);
 
-        var actor = await GetActiveUserAsync(request.ActorUserId, cancellationToken);
+        var actor = await GetActiveUserAsync(actorUserId, cancellationToken);
 
         var batchExists = await dbContext.Batches
             .AnyAsync(x => x.BatchNumber == request.BatchNumber, cancellationToken);
@@ -62,7 +62,7 @@ internal sealed class PostgresBatchCommandService(GreenLedgerDbContext dbContext
             ?? throw new InvalidOperationException("The created batch could not be reloaded.");
     }
 
-    public async Task<BatchSummaryDto> RegisterMovementAsync(Guid batchId, RegisterBatchMovementRequestDto request, CancellationToken cancellationToken)
+    public async Task<BatchSummaryDto> RegisterMovementAsync(Guid batchId, RegisterBatchMovementRequestDto request, Guid actorUserId, CancellationToken cancellationToken)
     {
         ValidateMovementRequest(request);
 
@@ -70,7 +70,7 @@ internal sealed class PostgresBatchCommandService(GreenLedgerDbContext dbContext
             .FirstOrDefaultAsync(x => x.Id == batchId, cancellationToken)
             ?? throw new KeyNotFoundException("Batch was not found.");
 
-        var actor = await GetActiveUserAsync(request.ActorUserId, cancellationToken);
+        var actor = await GetActiveUserAsync(actorUserId, cancellationToken);
         var previousStage = batch.CurrentStage;
         var nextStage = ParseEnumValue<BatchStage>(request.ToStage);
 
@@ -96,7 +96,7 @@ internal sealed class PostgresBatchCommandService(GreenLedgerDbContext dbContext
             ?? throw new InvalidOperationException("The updated batch could not be reloaded.");
     }
 
-    public async Task<BatchSummaryDto> ChangeStatusAsync(Guid batchId, ChangeBatchStatusRequestDto request, CancellationToken cancellationToken)
+    public async Task<BatchSummaryDto> ChangeStatusAsync(Guid batchId, ChangeBatchStatusRequestDto request, Guid actorUserId, CancellationToken cancellationToken)
     {
         ValidateStatusRequest(request);
 
@@ -104,7 +104,7 @@ internal sealed class PostgresBatchCommandService(GreenLedgerDbContext dbContext
             .FirstOrDefaultAsync(x => x.Id == batchId, cancellationToken)
             ?? throw new KeyNotFoundException("Batch was not found.");
 
-        var actor = await GetActiveUserAsync(request.ActorUserId, cancellationToken);
+        var actor = await GetActiveUserAsync(actorUserId, cancellationToken);
         var previousStatus = batch.Status;
         var nextStatus = ParseEnumValue<BatchLifecycleStatus>(request.Status);
 
@@ -207,8 +207,7 @@ internal sealed class PostgresBatchCommandService(GreenLedgerDbContext dbContext
     {
         if (string.IsNullOrWhiteSpace(request.BatchNumber) ||
             string.IsNullOrWhiteSpace(request.ProductName) ||
-            string.IsNullOrWhiteSpace(request.CultivarName) ||
-            request.ActorUserId == Guid.Empty)
+            string.IsNullOrWhiteSpace(request.CultivarName))
         {
             throw new InvalidOperationException("Create batch request is incomplete.");
         }
@@ -217,8 +216,7 @@ internal sealed class PostgresBatchCommandService(GreenLedgerDbContext dbContext
     private static void ValidateMovementRequest(RegisterBatchMovementRequestDto request)
     {
         if (string.IsNullOrWhiteSpace(request.ToStage) ||
-            string.IsNullOrWhiteSpace(request.Notes) ||
-            request.ActorUserId == Guid.Empty)
+            string.IsNullOrWhiteSpace(request.Notes))
         {
             throw new InvalidOperationException("Register movement request is incomplete.");
         }
@@ -227,8 +225,7 @@ internal sealed class PostgresBatchCommandService(GreenLedgerDbContext dbContext
     private static void ValidateStatusRequest(ChangeBatchStatusRequestDto request)
     {
         if (string.IsNullOrWhiteSpace(request.Status) ||
-            string.IsNullOrWhiteSpace(request.Reason) ||
-            request.ActorUserId == Guid.Empty)
+            string.IsNullOrWhiteSpace(request.Reason))
         {
             throw new InvalidOperationException("Change status request is incomplete.");
         }
