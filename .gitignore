@@ -1,0 +1,17 @@
+front/node_modules/
+front/dist/
+back/**/bin/
+back/**/obj/
+.DS_Store
+Thumbs.db
+.vs/
+.vscode/
+*.user
+*.suo
+*.log
+explicaciones/
+GETTING_STARTED_ES.md
+front/.env.example
+back/README.md
+back/storage/
+back/docs/architecture.md

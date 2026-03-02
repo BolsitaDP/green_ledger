@@ -1,0 +1,24 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: greenledger-postgres
+    environment:
+      POSTGRES_DB: greenledger
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - greenledger-postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    container_name: greenledger-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - greenledger-redis-data:/data
+
+volumes:
+  greenledger-postgres-data:
+  greenledger-redis-data:
