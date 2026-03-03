@@ -3,7 +3,7 @@ services:
     image: postgres:16
     container_name: greenledger-postgres
     environment:
-      POSTGRES_DB: greenledger
+      POSTGRES_DB: greenledger_app
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:

@@ -16,3 +16,4 @@ front/.env.example
 back/README.md
 back/storage/
 back/docs/architecture.md
+PROMPT.md

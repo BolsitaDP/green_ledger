@@ -1,13 +1,5 @@
-export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5105'
-
-export class ApiError extends Error {
-  status: number
-
-  constructor(status: number, message: string) {
-    super(message)
-    this.status = status
-  }
-}
+import { ensureValidAccessToken, refreshAuthSession } from './auth'
+import { apiBaseUrl, createApiError } from './http'
 
 type ApiRequestOptions = {
   token?: string
@@ -15,7 +7,7 @@ type ApiRequestOptions = {
   contentType?: string
 }
 
-async function apiRequest<T>(method: string, path: string, options: ApiRequestOptions = {}): Promise<T> {
+async function buildHeaders(options: ApiRequestOptions): Promise<Headers> {
   const headers = new Headers()
 
   if (options.contentType) {
@@ -23,17 +15,50 @@ async function apiRequest<T>(method: string, path: string, options: ApiRequestOp
   }
 
   if (options.token) {
-    headers.set('Authorization', `Bearer ${options.token}`)
+    const accessToken = await ensureValidAccessToken()
+
+    if (accessToken) {
+      headers.set('Authorization', `Bearer ${accessToken}`)
+    }
   }
 
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  return headers
+}
+
+async function executeRequest(method: string, path: string, options: ApiRequestOptions = {}): Promise<Response> {
+  const headers = await buildHeaders(options)
+
+  return fetch(`${apiBaseUrl}${path}`, {
     method,
     headers,
     body: options.body ?? null,
   })
+}
+
+async function readErrorPayload(response: Response): Promise<unknown> {
+  const contentType = response.headers.get('content-type') ?? ''
+
+  if (contentType.includes('application/json')) {
+    return await response.json()
+  }
+
+  const text = await response.text()
+  return text.trim().length > 0 ? text : undefined
+}
+
+async function apiRequest<T>(method: string, path: string, options: ApiRequestOptions = {}): Promise<T> {
+  let response = await executeRequest(method, path, options)
+
+  if (response.status === 401 && options.token) {
+    const refreshedSession = await refreshAuthSession()
+
+    if (refreshedSession?.accessToken) {
+      response = await executeRequest(method, path, options)
+    }
+  }
 
   if (!response.ok) {
-    throw new ApiError(response.status, `Request failed with status ${response.status}`)
+    throw createApiError(response.status, await readErrorPayload(response))
   }
 
   if (response.status === 204) {
@@ -55,21 +80,37 @@ export async function apiPost<TResponse>(path: string, payload: unknown, token?:
   })
 }
 
-export async function apiDownload(path: string, token?: string): Promise<Blob> {
-  const headers = new Headers()
+export async function apiPatch<TResponse>(path: string, payload: unknown, token?: string): Promise<TResponse> {
+  return apiRequest<TResponse>('PATCH', path, {
+    token,
+    contentType: 'application/json',
+    body: JSON.stringify(payload),
+  })
+}
 
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`)
+export async function apiPostForm<TResponse>(path: string, formData: FormData, token?: string): Promise<TResponse> {
+  return apiRequest<TResponse>('POST', path, {
+    token,
+    body: formData,
+  })
+}
+
+export async function apiDownload(path: string, token?: string): Promise<Blob> {
+  let response = await executeRequest('GET', path, { token })
+
+  if (response.status === 401 && token) {
+    const refreshedSession = await refreshAuthSession()
+
+    if (refreshedSession?.accessToken) {
+      response = await executeRequest('GET', path, { token })
+    }
   }
 
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    method: 'GET',
-    headers,
-  })
-
   if (!response.ok) {
-    throw new ApiError(response.status, `Request failed with status ${response.status}`)
+    throw createApiError(response.status, await readErrorPayload(response))
   }
 
   return await response.blob()
 }
+
+export { apiBaseUrl }
